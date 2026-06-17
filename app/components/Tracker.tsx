@@ -315,6 +315,7 @@ export default function Tracker() {
 
   const today = mounted ? new Date() : new Date(0);
   const isDone = live.phase === "idle" && live.remainingFocusSeconds <= 0;
+  const isLunch = live.phase === "lunch";
   const todayFocus = focusDoneToday(live);
 
   // Progress split into the 4 focus blocks: done = full, current = partial,
@@ -387,12 +388,16 @@ export default function Tracker() {
             </span>
           ) : null}
 
-          <div className="font-mono text-[clamp(40px,13vw,52px)] font-medium tracking-[0.5px] tabular-nums leading-none text-white">
+          <div
+            className={`font-mono text-[clamp(40px,13vw,52px)] font-medium tracking-[0.5px] tabular-nums leading-none text-white transition-opacity duration-300 ${isLunch ? "opacity-20" : "opacity-100"}`}
+          >
             {bigTimer}
           </div>
 
           {/* Progress across the 4 focus blocks */}
-          <div className="mt-1 flex w-full gap-[6px]">
+          <div
+            className={`mt-1 flex w-full gap-[6px] transition-opacity duration-300 ${isLunch ? "opacity-20" : "opacity-100"}`}
+          >
             {blockFills.map((fill, i) => (
               <div
                 key={i}
@@ -410,7 +415,7 @@ export default function Tracker() {
           {/* Phase sub-status */}
           <div
             className="mt-1 min-h-[17px] text-center text-[13px] tabular-nums"
-            style={{ color: "var(--sub)" }}
+            style={{ color: live.phase === "focus" || isLunch ? "#ffffff" : "var(--sub)" }}
           >
             {!mounted ? null : live.phase === "focus" ? (
               <span>
