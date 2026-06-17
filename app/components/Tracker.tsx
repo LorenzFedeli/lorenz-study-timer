@@ -29,6 +29,51 @@ const TICK_MS = 500;
 const SERVER_DEBOUNCE_MS = 750;
 const CHECKPOINT_MS = 10000;
 const SERVER_POLL_MS = 5000;
+const DAILY_QUOTES = [
+  "Status: Loading Brain Cells... Bitte nicht den Stecker ziehen.",
+  "Möge dein Kaffee stark und deine Kompilierfehler nicht existent sein.",
+  "Koffein-Level: 95%. Motivations-Level: 404 - Not Found. Der Timer läuft trotzdem!",
+  "Es ist kein Bug. Es ist ein Feature, das dich heute zum Lernen zwingt.",
+  "Ctrl + Alt + Durchziehen. Jammern wird später implementiert.",
+  "Es gibt 10 Arten von Menschen: Die, die Binärcode verstehen, und die, die Freizeit haben.",
+  "Dein Gehirn hat gerade zu wenig RAM. Zeit für einen Fokus-Reboot!",
+  "Fehler beim Kompilieren deines Wissens? Drücke nicht auf Abbrechen. Such den Bug!",
+  "Mach dir keine Sorgen wegen Thermodynamik. Die Entropie gewinnt am Ende sowieso.",
+  "Sei wie ein Proton: Immer positiv bleiben (auch wenn die Klausurphase negativ aussieht).",
+  "Die Klausur ist wie Schrödingers Katze: Solange du nicht antrittst, hast du gleichzeitig bestanden und bist durchgefallen.",
+  "Pi ist exakt 3. Zumindest für die nächsten 25 Minuten Fokus. Ruhig bleiben.",
+  "Wenn Newton auf den Apfel gewartet hat, kannst du auch auf den Geistesblitz warten. Aber lies gefälligst das Skript dabei!",
+  "Du bist kein Durchschnitt. Du bist das globale Maximum der Verteilung!",
+  "Das Leben ist kein Ponyhof, sondern ein Labor. Und du bist heute der Chefwissenschaftler.",
+  "Wenn es sich bewegt und es sollte nicht: Klebeband. Wenn es sich nicht bewegt und es sollte: Lernen.",
+  "Ingenieure lösen Probleme, von denen du nicht wusstest, dass du sie hast, auf eine Weise, die du nicht verstehst. Fang an.",
+  "Ein schlaues Pferd springt nur so hoch wie es muss. Ein Ingenieur baut eine Rampe.",
+  "Zieh durch! Die Welt braucht Menschen, die wissen, warum die Brücke hält.",
+  "Keine Ausreden. Die Raketenwissenschaft baut sich schließlich nicht von alleine.",
+  "Einfach kann jeder. Deswegen sitzest du hier.",
+  "Lernen ist wie das Kauen auf Glasscheiben - aber hey, das Gehalt später wird weich!",
+  "Du lernst nicht für die Uni, du lernst für das High-End-Setup in deiner zukünftigen Bude.",
+  "Nur noch 500 Seiten Skript, dann darfst du wieder schlafen.",
+  "Lerne jetzt, weine später - und zwar beim Zählen deines Geldes im ersten Job.",
+  "MINT-Studium: Wo \"Ich habe es verstanden\" bedeutet, dass man aufgehört hat zu fragen warum.",
+  "45 Minuten Fokus bringen dich näher an den Abschluss als 45 Minuten TikTok.",
+  "Fokus an. Welt aus. Kaffee rein.",
+  "Auch der längste Algorithmus beginnt mit einer Zeile Code.",
+  "Dein innerer Schweinehund ist auch nur ein Systemfehler.",
+  "Nicht aufgeben. Cortana glaubt an dich (auch wenn es sonst niemand tut).",
+  "Schweiß fließt, wenn Muskeln weinen. Kaffee fließt, wenn das Gehirn arbeitet.",
+  "Konzentration ist die Fähigkeit, das Handy als Briefbeschwerer zu nutzen.",
+  "Gestern ging nichts. Heute geht nichts. Kontinuität ist der Schlüssel!",
+  "Kopf hoch! Irgendwo da draußen vergisst gerade ein Professor ein Semikolon.",
+];
+
+function quoteIndexForDateKey(dateKey: string): number {
+  let hash = 0;
+  for (const char of dateKey) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  }
+  return hash % DAILY_QUOTES.length;
+}
 
 export default function Tracker() {
   const [mounted, setMounted] = useState(false);
@@ -317,6 +362,7 @@ export default function Tracker() {
   const isDone = live.phase === "idle" && live.remainingFocusSeconds <= 0;
   const isLunch = live.phase === "lunch";
   const todayFocus = focusDoneToday(live);
+  const dailyQuote = DAILY_QUOTES[quoteIndexForDateKey(live.dateKey || todayKey(today))];
 
   // Progress split into the 4 focus blocks: done = full, current = partial,
   // future = empty.
@@ -452,6 +498,10 @@ export default function Tracker() {
             {primaryLabel}
           </button>
         </section>
+
+        <footer className="mt-auto text-center text-[11px] leading-[1.45] text-white/55">
+          {dailyQuote}
+        </footer>
       </main>
     </div>
   );
