@@ -27,20 +27,33 @@ export interface DayRecord {
   focusSeconds: number;
 }
 
+// The timer fields persisted server-side — a full, projectable snapshot so any
+// device can resume the exact live position on load. `anchorMs` is an absolute
+// Date.now() timestamp; `lastUpdated` drives last-writer-wins across devices.
+export interface PersistedTimer {
+  phase: Phase;
+  running: boolean;
+  remainingFocusSeconds: number;
+  blockElapsedSeconds: number;
+  breakElapsedSeconds: number;
+  lunchElapsedSeconds: number;
+  underlyingPhase: Phase;
+  anchorMs: number;
+  dateKey: string;
+  lastUpdated: string; // ISO string
+}
+
 // The canonical JSON persisted in Vercel Blob (and echoed by the API).
 export interface TrackerState {
   days: Record<string, DayRecord>;
-  timer: {
-    remainingFocusSeconds: number;
-    phase: Phase;
-    lastUpdated: string; // ISO string
-  };
+  timer: PersistedTimer;
 }
 
 // What we keep in localStorage for instant, precise local resume.
 export interface LocalCache {
   days: Record<string, DayRecord>;
   timer: TimerSnapshot;
+  updatedAt?: number; // ms epoch of the last local save (freshness vs. server)
 }
 
 export const STORAGE_KEY = "time-tracker:v1";
@@ -228,6 +241,22 @@ export function currentBlock(t: TimerSnapshot): number {
   return clamp(Math.floor(done / FOCUS_BLOCK_SECONDS) + 1, 1, FOCUS_BLOCKS);
 }
 
+// Rebuild a live snapshot from the persisted server timer, so it can be
+// projected forward to `now` on any device.
+export function timerFromState(t: PersistedTimer): TimerSnapshot {
+  return {
+    phase: t.phase,
+    running: t.running,
+    remainingFocusSeconds: t.remainingFocusSeconds,
+    blockElapsedSeconds: t.blockElapsedSeconds,
+    breakElapsedSeconds: t.breakElapsedSeconds,
+    lunchElapsedSeconds: t.lunchElapsedSeconds,
+    underlyingPhase: t.underlyingPhase,
+    anchorMs: t.anchorMs,
+    dateKey: t.dateKey,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Persistence mapping / merging
 // ---------------------------------------------------------------------------
@@ -236,8 +265,15 @@ export function defaultState(): TrackerState {
   return {
     days: {},
     timer: {
-      remainingFocusSeconds: FOCUS_GOAL_SECONDS,
       phase: "idle",
+      running: false,
+      remainingFocusSeconds: FOCUS_GOAL_SECONDS,
+      blockElapsedSeconds: 0,
+      breakElapsedSeconds: 0,
+      lunchElapsedSeconds: 0,
+      underlyingPhase: "idle",
+      anchorMs: 0,
+      dateKey: "",
       lastUpdated: new Date(0).toISOString(),
     },
   };
@@ -248,6 +284,7 @@ export function normalizeState(input: unknown): TrackerState {
   const base = defaultState();
   if (!input || typeof input !== "object") return base;
   const obj = input as Partial<TrackerState>;
+
   const days: Record<string, DayRecord> = {};
   if (obj.days && typeof obj.days === "object") {
     for (const [key, value] of Object.entries(obj.days)) {
@@ -257,28 +294,40 @@ export function normalizeState(input: unknown): TrackerState {
       }
     }
   }
-  const timer = obj.timer ?? base.timer;
+
+  const t = (obj.timer ?? {}) as Partial<PersistedTimer>;
+  const phases: Phase[] = ["idle", "focus", "break", "lunch"];
+  const num = (v: unknown, fallback: number, min: number, max: number): number =>
+    Number.isFinite(Number(v)) ? clamp(Number(v), min, max) : fallback;
+
   return {
     days,
     timer: {
-      remainingFocusSeconds: Number.isFinite(timer.remainingFocusSeconds)
-        ? clamp(timer.remainingFocusSeconds, 0, FOCUS_GOAL_SECONDS)
-        : FOCUS_GOAL_SECONDS,
-      phase: (["idle", "focus", "break", "lunch"] as Phase[]).includes(timer.phase)
-        ? timer.phase
+      phase: phases.includes(t.phase as Phase) ? (t.phase as Phase) : "idle",
+      running: typeof t.running === "boolean" ? t.running : false,
+      remainingFocusSeconds: num(t.remainingFocusSeconds, FOCUS_GOAL_SECONDS, 0, FOCUS_GOAL_SECONDS),
+      blockElapsedSeconds: num(t.blockElapsedSeconds, 0, 0, FOCUS_BLOCK_SECONDS),
+      breakElapsedSeconds: num(t.breakElapsedSeconds, 0, 0, BREAK_SECONDS),
+      lunchElapsedSeconds: num(t.lunchElapsedSeconds, 0, 0, Number.MAX_SAFE_INTEGER),
+      underlyingPhase: phases.includes(t.underlyingPhase as Phase)
+        ? (t.underlyingPhase as Phase)
         : "idle",
-      lastUpdated:
-        typeof timer.lastUpdated === "string" ? timer.lastUpdated : base.timer.lastUpdated,
+      anchorMs: num(t.anchorMs, 0, 0, Number.MAX_SAFE_INTEGER),
+      dateKey: typeof t.dateKey === "string" ? t.dateKey : base.timer.dateKey,
+      lastUpdated: typeof t.lastUpdated === "string" ? t.lastUpdated : base.timer.lastUpdated,
     },
   };
 }
 
-// Server-side merge: days from `patch` win per key (so a Reset to 0 is honored);
-// keys absent from the patch are preserved.
+// Server-side merge across devices: keep the higher focus per day (progress
+// never regresses) and the timer with the newer `lastUpdated`, so a stale
+// device can't clobber a fresher session.
 export function mergeServerState(current: TrackerState, patch: TrackerState): TrackerState {
+  const currentTime = Date.parse(current.timer.lastUpdated) || 0;
+  const patchTime = Date.parse(patch.timer.lastUpdated) || 0;
   return {
-    days: { ...current.days, ...patch.days },
-    timer: patch.timer,
+    days: mergeDaysMax(current.days, patch.days),
+    timer: patchTime >= currentTime ? patch.timer : current.timer,
   };
 }
 
@@ -307,8 +356,15 @@ export function toTrackerState(
   return {
     days: withToday,
     timer: {
-      remainingFocusSeconds: Math.round(timer.remainingFocusSeconds),
       phase: timer.phase,
+      running: timer.running,
+      remainingFocusSeconds: Math.round(timer.remainingFocusSeconds),
+      blockElapsedSeconds: Math.round(timer.blockElapsedSeconds),
+      breakElapsedSeconds: Math.round(timer.breakElapsedSeconds),
+      lunchElapsedSeconds: Math.round(timer.lunchElapsedSeconds),
+      underlyingPhase: timer.underlyingPhase,
+      anchorMs: timer.anchorMs,
+      dateKey: timer.dateKey,
       lastUpdated: new Date().toISOString(),
     },
   };

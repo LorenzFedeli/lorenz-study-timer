@@ -7,7 +7,6 @@ import {
   defaultState,
   FOCUS_BLOCK_SECONDS,
   FOCUS_BLOCKS,
-  FOCUS_GOAL_SECONDS,
   focusDoneToday,
   formatClock,
   formatHMS,
@@ -16,6 +15,7 @@ import {
   mergeDaysMax,
   project,
   STORAGE_KEY,
+  timerFromState,
   toTrackerState,
   todayKey,
   type DayRecord,
@@ -38,6 +38,9 @@ export default function Tracker() {
   const baseRef = useRef(base);
   const daysRef = useRef(days);
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Don't push to the server until the initial server reconcile has run, so a
+  // stale pre-reconcile snapshot can't clobber a fresher cross-device session.
+  const reconciled = useRef(false);
 
   useEffect(() => {
     baseRef.current = base;
@@ -52,6 +55,7 @@ export default function Tracker() {
   }, []);
 
   const pushServer = useCallback(() => {
+    if (!reconciled.current) return;
     const body = JSON.stringify(buildPersistState());
     fetch("/api/state", {
       method: "POST",
@@ -70,7 +74,11 @@ export default function Tracker() {
 
   const saveLocal = useCallback(() => {
     try {
-      const cache: LocalCache = { days: daysRef.current, timer: baseRef.current };
+      const cache: LocalCache = {
+        days: daysRef.current,
+        timer: baseRef.current,
+        updatedAt: Date.now(),
+      };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
     } catch {
       /* private mode / quota — ignore */
@@ -88,12 +96,14 @@ export default function Tracker() {
       const today = todayKey();
       let initialDays: Record<string, DayRecord> = {};
       let initialBase = freshTimer(today, now);
+      let localUpdatedAt = 0;
 
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
           const cache = JSON.parse(raw) as LocalCache;
           if (cache.days) initialDays = cache.days;
+          if (typeof cache.updatedAt === "number") localUpdatedAt = cache.updatedAt;
           if (cache.timer) {
             if (cache.timer.dateKey === today) {
               initialBase = project(cache.timer, now); // advance over the gap
@@ -122,19 +132,24 @@ export default function Tracker() {
         const server: TrackerState = res.ok ? await res.json() : defaultState();
         if (cancelled) return;
         setDays((prev) => mergeDaysMax(prev, server.days ?? {}));
-        setBase((prev) => {
-          if (prev.dateKey !== today || prev.running || prev.phase !== "idle") {
-            return prev; // active local session wins
-          }
-          const serverToday = server.days?.[today]?.focusSeconds ?? 0;
-          if (serverToday > focusDoneToday(prev)) {
-            const remaining = Math.max(0, FOCUS_GOAL_SECONDS - serverToday);
-            return { ...prev, remainingFocusSeconds: remaining };
-          }
-          return prev;
-        });
+
+        // Cross-device resume: if the server holds today's session and it was
+        // written more recently than our local copy, adopt it and project it to
+        // now. This is what makes a refresh on another device show the same
+        // running timer / pause. (Device clocks are assumed roughly in sync.)
+        const serverTime = Date.parse(server.timer?.lastUpdated ?? "") || 0;
+        if (server.timer?.dateKey === today && serverTime > localUpdatedAt) {
+          setBase(project(timerFromState(server.timer), Date.now()));
+        }
       } catch {
         /* server unreachable — localStorage already hydrated us */
+      } finally {
+        // Reconcile done: server pushes are now safe, and we flush our
+        // post-reconcile state so a local-newer session reaches the server.
+        if (!cancelled) {
+          reconciled.current = true;
+          scheduleServerPush();
+        }
       }
     };
 
@@ -142,7 +157,7 @@ export default function Tracker() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scheduleServerPush]);
 
   // ---- Clock tick: advance the display and commit phase / day transitions. ----
   useEffect(() => {
@@ -193,6 +208,7 @@ export default function Tracker() {
     if (!mounted) return;
     const flush = () => {
       saveLocal();
+      if (!reconciled.current) return;
       try {
         const blob = new Blob([JSON.stringify(buildPersistState())], {
           type: "application/json",
