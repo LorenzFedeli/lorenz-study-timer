@@ -35,6 +35,9 @@ Client nie.
 In Vercel unter **Storage → Create → Blob** einen Blob-Store mit dem Projekt
 verbinden; das `BLOB_READ_WRITE_TOKEN` wird dann automatisch als Environment-Variable
 injiziert. Für die lokale Entwicklung das Token mit `vercel env pull .env.local`
-herunterladen (Vorlage: `.env.local.example`). Ohne gesetztes Token startet die App
-trotzdem und nutzt automatisch nur `localStorage` als Speicher.
+herunterladen (Vorlage: `.env.local.example`).
+
+Ohne gesetztes Token nutzt die API einen gemeinsamen In-Memory-Speicher im laufenden
+Serverprozess. Das reicht zum lokalen Testen mit mehreren Geräten im selben Dev-Server,
+wird aber bei Server-Neustart zurückgesetzt und ist für Deployments nicht dauerhaft.
 # lorenz-study-timer

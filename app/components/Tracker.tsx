@@ -26,8 +26,9 @@ import {
 
 const WEEKDAYS_DE = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
 const TICK_MS = 500;
-const SERVER_DEBOUNCE_MS = 2000;
-const CHECKPOINT_MS = 30000;
+const SERVER_DEBOUNCE_MS = 750;
+const CHECKPOINT_MS = 10000;
+const SERVER_POLL_MS = 5000;
 
 export default function Tracker() {
   const [mounted, setMounted] = useState(false);
@@ -38,6 +39,7 @@ export default function Tracker() {
   const baseRef = useRef(base);
   const daysRef = useRef(days);
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastServerTimerUpdate = useRef(0);
   // Don't push to the server until the initial server reconcile has run, so a
   // stale pre-reconcile snapshot can't clobber a fresher cross-device session.
   const reconciled = useRef(false);
@@ -85,6 +87,20 @@ export default function Tracker() {
     }
   }, []);
 
+  const adoptServerState = useCallback((server: TrackerState, forceTimer = false): boolean => {
+    setDays((prev) => mergeDaysMax(prev, server.days ?? {}));
+
+    const today = todayKey();
+    const serverTime = Date.parse(server.timer?.lastUpdated ?? "") || 0;
+    const hasTodayTimer = server.timer?.dateKey === today && serverTime > 0;
+    if (!hasTodayTimer) return false;
+    if (!forceTimer && serverTime <= lastServerTimerUpdate.current) return false;
+
+    lastServerTimerUpdate.current = serverTime;
+    setBase(project(timerFromState(server.timer), Date.now()));
+    return true;
+  }, []);
+
   // ---- Mount: hydrate from localStorage, then reconcile with the server. ----
   useEffect(() => {
     let cancelled = false;
@@ -96,14 +112,13 @@ export default function Tracker() {
       const today = todayKey();
       let initialDays: Record<string, DayRecord> = {};
       let initialBase = freshTimer(today, now);
-      let localUpdatedAt = 0;
+      let adoptedServer = false;
 
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
           const cache = JSON.parse(raw) as LocalCache;
           if (cache.days) initialDays = cache.days;
-          if (typeof cache.updatedAt === "number") localUpdatedAt = cache.updatedAt;
           if (cache.timer) {
             if (cache.timer.dateKey === today) {
               initialBase = project(cache.timer, now); // advance over the gap
@@ -131,16 +146,11 @@ export default function Tracker() {
         const res = await fetch("/api/state", { cache: "no-store" });
         const server: TrackerState = res.ok ? await res.json() : defaultState();
         if (cancelled) return;
-        setDays((prev) => mergeDaysMax(prev, server.days ?? {}));
 
-        // Cross-device resume: if the server holds today's session and it was
-        // written more recently than our local copy, adopt it and project it to
-        // now. This is what makes a refresh on another device show the same
-        // running timer / pause. (Device clocks are assumed roughly in sync.)
-        const serverTime = Date.parse(server.timer?.lastUpdated ?? "") || 0;
-        if (server.timer?.dateKey === today && serverTime > localUpdatedAt) {
-          setBase(project(timerFromState(server.timer), Date.now()));
-        }
+        // Global-source behavior: if the server has today's timer, it wins over
+        // localStorage on page open. LocalStorage is only an offline/bootstrap
+        // fallback, not a per-device authority.
+        adoptedServer = adoptServerState(server, true);
       } catch {
         /* server unreachable — localStorage already hydrated us */
       } finally {
@@ -148,7 +158,7 @@ export default function Tracker() {
         // post-reconcile state so a local-newer session reaches the server.
         if (!cancelled) {
           reconciled.current = true;
-          scheduleServerPush();
+          if (!adoptedServer) scheduleServerPush();
         }
       }
     };
@@ -157,7 +167,7 @@ export default function Tracker() {
     return () => {
       cancelled = true;
     };
-  }, [scheduleServerPush]);
+  }, [adoptServerState, scheduleServerPush]);
 
   // ---- Clock tick: advance the display and commit phase / day transitions. ----
   useEffect(() => {
@@ -202,6 +212,34 @@ export default function Tracker() {
     }, CHECKPOINT_MS);
     return () => clearInterval(id);
   }, [mounted, pushServer]);
+
+  // ---- Coarse global sync: pick up starts/pauses from other devices. ----
+  useEffect(() => {
+    if (!mounted) return;
+    let cancelled = false;
+
+    const pullServer = async () => {
+      if (document.hidden) return;
+      try {
+        const res = await fetch("/api/state", { cache: "no-store" });
+        const server: TrackerState = res.ok ? await res.json() : defaultState();
+        if (!cancelled) adoptServerState(server);
+      } catch {
+        /* stay on the last local projection */
+      }
+    };
+
+    const id = setInterval(pullServer, SERVER_POLL_MS);
+    const onVisibility = () => {
+      if (!document.hidden) void pullServer();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [adoptServerState, mounted]);
 
   // ---- Flush on tab hide / unload ----
   useEffect(() => {

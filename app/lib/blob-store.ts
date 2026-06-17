@@ -11,15 +11,21 @@ import {
 } from "./tracker";
 
 const BLOB_PATH = "tracker-state.json";
+let memoryState = defaultState();
 
 function hasToken(): boolean {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 }
 
+export function persistenceMode(): "blob" | "memory" {
+  return hasToken() ? "blob" : "memory";
+}
+
 // Read the freshest state. Blob is CDN-cached, so we resolve the URL via head()
-// and fetch it with `no-store`. Missing file or missing token → default state.
+// and fetch it with `no-store`. Missing Blob token uses a process-local memory
+// store so local/dev testing still has one shared server-side timer.
 export async function readState(): Promise<TrackerState> {
-  if (!hasToken()) return defaultState();
+  if (!hasToken()) return normalizeState(memoryState);
   try {
     const meta = await head(BLOB_PATH);
     const res = await fetch(meta.url, { cache: "no-store" });
@@ -34,7 +40,10 @@ export async function readState(): Promise<TrackerState> {
 }
 
 async function writeState(state: TrackerState): Promise<void> {
-  if (!hasToken()) return;
+  if (!hasToken()) {
+    memoryState = normalizeState(state);
+    return;
+  }
   try {
     await put(BLOB_PATH, JSON.stringify(state), {
       access: "public",
