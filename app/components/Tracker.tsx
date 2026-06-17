@@ -29,13 +29,6 @@ const TICK_MS = 500;
 const SERVER_DEBOUNCE_MS = 2000;
 const CHECKPOINT_MS = 30000;
 
-const PHASE_BG: Record<string, string> = {
-  focus: "var(--bg-focus)",
-  idle: "var(--bg-focus)",
-  break: "var(--bg-break)",
-  lunch: "var(--bg-lunch)",
-};
-
 export default function Tracker() {
   const [mounted, setMounted] = useState(false);
   const [days, setDays] = useState<Record<string, DayRecord>>({});
@@ -261,12 +254,15 @@ export default function Tracker() {
     Math.min(1, Math.max(0, (todayFocus - i * FOCUS_BLOCK_SECONDS) / FOCUS_BLOCK_SECONDS)),
   );
 
-  // "pause" screen = the dark (#141414) break / lunch states; "focus" = black.
-  // Per-screen greys mirror .screen--focus / .screen--pause from the spec.
-  const gridVariant: "focus" | "pause" =
-    live.phase === "break" || live.phase === "lunch" ? "pause" : "focus";
-  const trackColor = gridVariant === "pause" ? "#2f2f32" : "#252528";
-  const pillBg = gridVariant === "pause" ? "#2a2a2c" : "#1a1a1c";
+  // Phase → screen palette class. Drives every CSS custom property (bg, pill,
+  // grid cells, track, fill, today-ring) for that screen.
+  const screenClass = !mounted
+    ? "s-black"
+    : live.phase === "break"
+      ? "s-green"
+      : live.phase === "lunch"
+        ? "s-pause"
+        : "s-black";
 
   const phaseLabel = !mounted
     ? "—"
@@ -282,7 +278,14 @@ export default function Tracker() {
 
   const blockLeft = Math.max(0, FOCUS_BLOCK_SECONDS - live.blockElapsedSeconds);
   const breakLeft = Math.max(0, BREAK_SECONDS - live.breakElapsedSeconds);
-  const bg = mounted ? PHASE_BG[live.phase] : PHASE_BG.idle;
+
+  // The big number: during a 5-min break it counts the break down (m:ss);
+  // otherwise it's the 6 h focus total (frozen during lunch).
+  const bigTimer = !mounted
+    ? "—:—:—"
+    : live.phase === "break"
+      ? formatClock(breakLeft)
+      : formatHMS(live.remainingFocusSeconds);
 
   const primaryLabel = !mounted
     ? "…"
@@ -295,14 +298,11 @@ export default function Tracker() {
           : "Weiter";
 
   return (
-    <div
-      className="min-h-screen w-full transition-colors duration-700 ease-out"
-      style={{ backgroundColor: bg }}
-    >
+    <div className={`screen min-h-screen w-full transition-colors duration-700 ease-out ${screenClass}`}>
       <main className="mx-auto flex min-h-screen w-full max-w-[420px] flex-col gap-7 px-5 pb-10 pt-7 text-white">
         {/* Day tracker */}
         {mounted ? (
-          <DayGrid days={days} todayFocusSeconds={todayFocus} now={today} variant={gridVariant} />
+          <DayGrid days={days} todayFocusSeconds={todayFocus} now={today} />
         ) : (
           <div className="w-full aspect-[6/5]" />
         )}
@@ -311,15 +311,15 @@ export default function Tracker() {
         <section className="flex flex-col items-center gap-3 pt-2">
           {mounted ? (
             <span
-              className="rounded-[20px] px-[14px] py-[5px] text-xs uppercase tracking-[2.5px] text-[#9a9aa0]"
-              style={{ backgroundColor: pillBg }}
+              className="rounded-[20px] px-[13px] py-[5px] text-[11px] uppercase tracking-[2.5px]"
+              style={{ backgroundColor: "var(--pill-bg)", color: "var(--pill-text)" }}
             >
               {phaseLabel}
             </span>
           ) : null}
 
-          <div className="font-mono text-[clamp(40px,13vw,52px)] font-medium tracking-[1px] tabular-nums leading-none">
-            {mounted ? formatHMS(live.remainingFocusSeconds) : "—:—:—"}
+          <div className="font-mono text-[clamp(40px,13vw,52px)] font-medium tracking-[0.5px] tabular-nums leading-none text-white">
+            {bigTimer}
           </div>
 
           {/* Progress across the 4 focus blocks */}
@@ -328,29 +328,27 @@ export default function Tracker() {
               <div
                 key={i}
                 className="h-[6px] flex-1 overflow-hidden rounded-[3px]"
-                style={{ backgroundColor: trackColor }}
+                style={{ backgroundColor: "var(--track)" }}
               >
                 <div
                   className="h-full rounded-[3px] transition-[width] duration-500"
-                  style={{ width: `${fill * 100}%`, backgroundColor: "#2faa5a" }}
+                  style={{ width: `${fill * 100}%`, backgroundColor: "var(--segfill)" }}
                 />
               </div>
             ))}
           </div>
 
           {/* Phase sub-status */}
-          <div className="mt-1 min-h-[28px] text-center text-sm tabular-nums text-[#7c7c82]">
+          <div
+            className="mt-1 min-h-[17px] text-center text-[13px] tabular-nums"
+            style={{ color: "var(--sub)" }}
+          >
             {!mounted ? null : live.phase === "focus" ? (
               <span>
                 noch{" "}
                 <span className="font-mono tabular-nums">{formatClock(blockLeft)}</span> im Block
               </span>
-            ) : live.phase === "break" ? (
-              <span>
-                Pause · noch{" "}
-                <span className="font-mono tabular-nums">{formatClock(breakLeft)}</span>
-              </span>
-            ) : live.phase === "lunch" ? (
+            ) : live.phase === "break" ? null : live.phase === "lunch" ? (
               <span>
                 Mittagspause ·{" "}
                 <span className="font-mono tabular-nums">
@@ -358,7 +356,7 @@ export default function Tracker() {
                 </span>
               </span>
             ) : isDone ? (
-              <span>6 h Fokuszeit erreicht 🎉</span>
+              <span>Tagesziel erreicht</span>
             ) : (
               <span>
                 {WEEKDAYS_DE[today.getDay()]}
@@ -374,7 +372,8 @@ export default function Tracker() {
             type="button"
             onClick={onPrimary}
             disabled={!mounted || isDone}
-            className="w-full rounded-xl bg-[#1d1d20] p-[14px] text-[15px] font-medium text-[#ededed] transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
+            className="w-full rounded-xl p-[14px] text-[14px] font-medium transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ backgroundColor: "var(--btn-bg)", color: "var(--btn-text)" }}
           >
             {primaryLabel}
           </button>

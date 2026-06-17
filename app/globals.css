@@ -3,10 +3,23 @@
 :root {
   color-scheme: dark;
 
-  /* Phase backgrounds for the full-screen timer */
-  --bg-focus: #000000; /* focus & idle → black */
-  --bg-break: #141414; /* 5-min break → dark, same as lunch */
-  --bg-lunch: #141414; /* lunch break → dark, no brown */
+  --accent: #2faa5a;
+  --text-muted: #7c7c82;
+  --btn-bg: #1d1d20;
+  --btn-text: #ededed;
+
+  /* Element colours — constant across every screen. Only the page background
+     (--bg) changes per phase; the button, grid cells, pill, progress and
+     today-ring keep these values everywhere. */
+  --pill-bg: #1a1a1c;
+  --pill-text: #9a9aa0;
+  --cell-empty: #1c1c1e;
+  --cell-exam: #55555a;
+  --track: #252528;
+  --fill: #2faa5a;
+  --segfill: #2faa5a;
+  --ring: #ffffff;
+  --sub: var(--text-muted);
 }
 
 @theme inline {
@@ -19,4 +32,21 @@ body {
   background: #000000;
   color: #ffffff;
   font-family: var(--font-geist), ui-sans-serif, system-ui, -apple-system, Helvetica, Arial, sans-serif;
+}
+
+/* Per-phase screen background only — every other colour stays constant. */
+.screen {
+  background: var(--bg);
+}
+
+.s-black {
+  --bg: #000000;
+}
+
+.s-pause {
+  --bg: #141414;
+}
+
+.s-green {
+  --bg: #239a50;
 }

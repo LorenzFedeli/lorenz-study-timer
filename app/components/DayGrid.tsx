@@ -16,33 +16,23 @@ const EXAM_DATES = new Set([
   "2026-07-24", // Fr, Woche 6
 ]);
 
-// Per-screen cell palette. "focus" = black screen, "pause" = #141414 screen.
-const PALETTE = {
-  focus: { empty: "#1c1c1e", exam: "#55555a" },
-  pause: { empty: "#262628", exam: "#5b5b60" },
-} as const;
-
-const TODAY_BG = "#2faa5a";
-const TODAY_OUTLINE = "#57d98f";
-
 interface DayGridProps {
   days: Record<string, DayRecord>;
   todayFocusSeconds: number;
   now: Date;
-  variant: "focus" | "pause";
 }
 
-export default function DayGrid({ days, todayFocusSeconds, now, variant }: DayGridProps) {
+// Colours come from the per-phase CSS variables on the enclosing .screen.
+export default function DayGrid({ days, todayFocusSeconds, now }: DayGridProps) {
   const weeks = buildGrid(now);
   const todayStr = localDateKey(now);
-  const palette = PALETTE[variant];
 
   return (
     <div className="w-full">
       {/* One column per week — current week left, future weeks to the right */}
-      <div className="flex w-full gap-2">
+      <div className="flex w-full gap-[7px]">
         {weeks.map((week, wi) => (
-          <div key={wi} className="flex flex-1 flex-col gap-2">
+          <div key={wi} className="flex flex-1 flex-col gap-[7px]">
             {week.map((date) => {
               const key = localDateKey(date);
               const isToday = key === todayStr;
@@ -50,35 +40,33 @@ export default function DayGrid({ days, todayFocusSeconds, now, variant }: DayGr
               const seconds = isToday
                 ? todayFocusSeconds
                 : (days[key]?.focusSeconds ?? 0);
-              const isComplete = seconds >= FOCUS_GOAL_SECONDS - 1; // 6 h goal reached
+              const fraction = Math.min(1, Math.max(0, seconds / FOCUS_GOAL_SECONDS));
               const hours = seconds / 3600;
               const label = isExam
                 ? `${key}: Prüfungstermin`
                 : `${key}: ${hours.toFixed(1)} Stunden Fokus`;
-
-              // Today is always the green marker; completed past days fill green
-              // once the goal is reached; everything else stays an empty slot.
-              const backgroundColor = isToday
-                ? TODAY_BG
-                : isExam
-                  ? palette.exam
-                  : isComplete
-                    ? TODAY_BG
-                    : palette.empty;
 
               return (
                 <div
                   key={key}
                   title={label}
                   aria-label={label}
-                  className="aspect-square w-full rounded-[4px]"
+                  className="relative aspect-square w-full overflow-hidden rounded-[4px]"
                   style={{
-                    backgroundColor,
+                    backgroundColor: isExam ? "var(--cell-exam)" : "var(--cell-empty)",
                     ...(isToday
-                      ? { outline: `2px solid ${TODAY_OUTLINE}`, outlineOffset: "1px" }
+                      ? { outline: "2px solid var(--ring)", outlineOffset: "1px" }
                       : null),
                   }}
-                />
+                >
+                  {/* Focus done that day fills the cell from the bottom up. */}
+                  {!isExam && fraction > 0 ? (
+                    <div
+                      className="absolute inset-x-0 bottom-0"
+                      style={{ height: `${fraction * 100}%`, backgroundColor: "var(--fill)" }}
+                    />
+                  ) : null}
+                </div>
               );
             })}
           </div>
