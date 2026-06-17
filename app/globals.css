@@ -5,16 +5,12 @@
 
   /* Phase backgrounds for the full-screen timer */
   --bg-focus: #000000; /* focus & idle → black */
-  --bg-break: #15803d; /* 5-min break → green */
-  --bg-lunch: #292524; /* lunch break → warm dark */
-
-  /* Empty day cell in the planner grid */
-  --cell-empty: #1c1c1f;
-  /* Exam date marker (lighter gray, not a completed focus day) */
-  --cell-exam: #9ca3af;
+  --bg-break: #141414; /* 5-min break → dark, same as lunch */
+  --bg-lunch: #141414; /* lunch break → dark, no brown */
 }
 
 @theme inline {
+  --font-sans: var(--font-geist);
   --font-mono: var(--font-geist-mono);
 }
 
@@ -22,5 +18,5 @@ html,
 body {
   background: #000000;
   color: #ffffff;
-  font-family: ui-sans-serif, system-ui, -apple-system, Helvetica, Arial, sans-serif;
+  font-family: var(--font-geist), ui-sans-serif, system-ui, -apple-system, Helvetica, Arial, sans-serif;
 }

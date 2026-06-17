@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DayGrid from "./DayGrid";
 import {
   BREAK_SECONDS,
-  currentBlock,
   defaultState,
   FOCUS_BLOCK_SECONDS,
   FOCUS_BLOCKS,
@@ -255,7 +254,19 @@ export default function Tracker() {
   const today = mounted ? new Date() : new Date(0);
   const isDone = live.phase === "idle" && live.remainingFocusSeconds <= 0;
   const todayFocus = focusDoneToday(live);
-  const goalFraction = Math.min(1, todayFocus / FOCUS_GOAL_SECONDS);
+
+  // Progress split into the 4 focus blocks: done = full, current = partial,
+  // future = empty.
+  const blockFills = Array.from({ length: FOCUS_BLOCKS }, (_, i) =>
+    Math.min(1, Math.max(0, (todayFocus - i * FOCUS_BLOCK_SECONDS) / FOCUS_BLOCK_SECONDS)),
+  );
+
+  // "pause" screen = the dark (#141414) break / lunch states; "focus" = black.
+  // Per-screen greys mirror .screen--focus / .screen--pause from the spec.
+  const gridVariant: "focus" | "pause" =
+    live.phase === "break" || live.phase === "lunch" ? "pause" : "focus";
+  const trackColor = gridVariant === "pause" ? "#2f2f32" : "#252528";
+  const pillBg = gridVariant === "pause" ? "#2a2a2c" : "#1a1a1c";
 
   const phaseLabel = !mounted
     ? "—"
@@ -291,52 +302,63 @@ export default function Tracker() {
       <main className="mx-auto flex min-h-screen w-full max-w-[420px] flex-col gap-7 px-5 pb-10 pt-7 text-white">
         {/* Day tracker */}
         {mounted ? (
-          <DayGrid days={days} todayFocusSeconds={todayFocus} now={today} />
+          <DayGrid days={days} todayFocusSeconds={todayFocus} now={today} variant={gridVariant} />
         ) : (
-          <div className="h-[114px]" />
+          <div className="w-full aspect-[6/5]" />
         )}
 
         {/* Main timer */}
         <section className="flex flex-col items-center gap-3 pt-2">
           {mounted ? (
-            <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-widest text-white/80">
+            <span
+              className="rounded-[20px] px-[14px] py-[5px] text-xs uppercase tracking-[2.5px] text-[#9a9aa0]"
+              style={{ backgroundColor: pillBg }}
+            >
               {phaseLabel}
             </span>
           ) : null}
 
-          <div className="font-mono text-6xl font-bold tabular-nums leading-none">
+          <div className="font-mono text-[clamp(40px,13vw,52px)] font-medium tracking-[1px] tabular-nums leading-none">
             {mounted ? formatHMS(live.remainingFocusSeconds) : "—:—:—"}
           </div>
 
-          {/* Overall goal progress */}
-          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-            <div
-              className="h-full rounded-full bg-emerald-400 transition-[width] duration-500"
-              style={{ width: `${goalFraction * 100}%` }}
-            />
+          {/* Progress across the 4 focus blocks */}
+          <div className="mt-1 flex w-full gap-[6px]">
+            {blockFills.map((fill, i) => (
+              <div
+                key={i}
+                className="h-[6px] flex-1 overflow-hidden rounded-[3px]"
+                style={{ backgroundColor: trackColor }}
+              >
+                <div
+                  className="h-full rounded-[3px] transition-[width] duration-500"
+                  style={{ width: `${fill * 100}%`, backgroundColor: "#2faa5a" }}
+                />
+              </div>
+            ))}
           </div>
 
           {/* Phase sub-status */}
-          <div className="mt-1 min-h-[28px] text-center text-sm text-white/80">
+          <div className="mt-1 min-h-[28px] text-center text-sm tabular-nums text-[#7c7c82]">
             {!mounted ? null : live.phase === "focus" ? (
               <span>
-                Block {currentBlock(live)}/{FOCUS_BLOCKS} · noch{" "}
+                noch{" "}
                 <span className="font-mono tabular-nums">{formatClock(blockLeft)}</span> im Block
               </span>
             ) : live.phase === "break" ? (
-              <span className="text-base font-semibold">
+              <span>
                 Pause · noch{" "}
                 <span className="font-mono tabular-nums">{formatClock(breakLeft)}</span>
               </span>
             ) : live.phase === "lunch" ? (
-              <span className="text-base font-semibold">
+              <span>
                 Mittagspause ·{" "}
                 <span className="font-mono tabular-nums">
                   {formatClock(live.lunchElapsedSeconds)}
                 </span>
               </span>
             ) : isDone ? (
-              <span className="text-base font-semibold">6 h Fokuszeit erreicht 🎉</span>
+              <span>6 h Fokuszeit erreicht 🎉</span>
             ) : (
               <span>
                 {WEEKDAYS_DE[today.getDay()]}
@@ -352,7 +374,7 @@ export default function Tracker() {
             type="button"
             onClick={onPrimary}
             disabled={!mounted || isDone}
-            className="w-full rounded-2xl bg-white px-4 py-5 text-lg font-semibold text-black transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+            className="w-full rounded-xl bg-[#1d1d20] p-[14px] text-[15px] font-medium text-[#ededed] transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {primaryLabel}
           </button>
