@@ -314,8 +314,8 @@ export default function Tracker() {
           : "Weiter";
 
   return (
-    <div className={`screen min-h-screen w-full transition-colors duration-700 ease-out ${screenClass}`}>
-      <main className="mx-auto flex min-h-screen w-full max-w-[420px] flex-col gap-7 px-5 pb-10 pt-7 text-white">
+    <div className={`screen min-h-[100dvh] w-full transition-colors duration-700 ease-out ${screenClass}`}>
+      <main className="mx-auto flex min-h-[100dvh] w-full max-w-[420px] flex-col gap-7 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pl-[calc(1.25rem+env(safe-area-inset-left))] pr-[calc(1.25rem+env(safe-area-inset-right))] pt-[calc(1.75rem+env(safe-area-inset-top))] text-white">
         {/* Day tracker */}
         {mounted ? (
           <DayGrid days={days} todayFocusSeconds={todayFocus} now={today} />

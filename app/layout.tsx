@@ -17,7 +17,20 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Lern-Timer",
+  applicationName: "Lern-Timer",
   description: "Persönlicher Uni-Lern-Timer: 6 h fokussierte Lernzeit pro Werktag in 90-Minuten-Blöcken.",
+  appleWebApp: {
+    capable: true,
+    title: "Lern-Timer",
+    statusBarStyle: "black-translucent",
+  },
+  formatDetection: {
+    telephone: false,
+    date: false,
+    address: false,
+    email: false,
+    url: false,
+  },
 };
 
 export const viewport: Viewport = {
@@ -26,6 +39,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

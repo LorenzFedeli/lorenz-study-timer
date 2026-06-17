@@ -23,8 +23,8 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-geist);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
 }
 
 html,
@@ -32,6 +32,10 @@ body {
   background: #000000;
   color: #ffffff;
   font-family: var(--font-geist), ui-sans-serif, system-ui, -apple-system, Helvetica, Arial, sans-serif;
+  height: 100%;
+  margin: 0;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Per-phase screen background only — every other colour stays constant. */
