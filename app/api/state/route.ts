@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { commitState, persistenceMode, readState } from "@/app/lib/blob-store";
+import { commitState, persistenceMode, readState } from "@/app/lib/state-store";
 import { normalizeState } from "@/app/lib/tracker";
 
 // Never cache: this route reads/writes live cross-device state.

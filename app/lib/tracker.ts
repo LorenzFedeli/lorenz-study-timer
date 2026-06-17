@@ -43,7 +43,7 @@ export interface PersistedTimer {
   lastUpdated: string; // ISO string
 }
 
-// The canonical JSON persisted in Vercel Blob (and echoed by the API).
+// The canonical JSON persisted server-side (and echoed by the API).
 export interface TrackerState {
   days: Record<string, DayRecord>;
   timer: PersistedTimer;
@@ -279,7 +279,7 @@ export function defaultState(): TrackerState {
   };
 }
 
-// Defensive normalization of whatever JSON we read back from Blob.
+// Defensive normalization of whatever JSON we read back from persistence.
 export function normalizeState(input: unknown): TrackerState {
   const base = defaultState();
   if (!input || typeof input !== "object") return base;

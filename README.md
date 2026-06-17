@@ -25,19 +25,28 @@ npm run dev
 
 [http://localhost:3000](http://localhost:3000) öffnen.
 
-## Persistenz (Vercel Blob)
+## Persistenz (Upstash Redis)
 
-Der gesamte App-State liegt geräteübergreifend in **einer** JSON-Datei
-(`tracker-state.json`) im Vercel-Blob-Store. Der Zugriff erfolgt ausschließlich
+Der gesamte App-State liegt geräteübergreifend in **einem** Redis-Key
+(`time-tracker:state:v1`) in Upstash Redis. Der Zugriff erfolgt ausschließlich
 serverseitig über die Route Handler unter `app/api/state` — das Token erreicht den
 Client nie.
 
-In Vercel unter **Storage → Create → Blob** einen Blob-Store mit dem Projekt
-verbinden; das `BLOB_READ_WRITE_TOKEN` wird dann automatisch als Environment-Variable
-injiziert. Für die lokale Entwicklung das Token mit `vercel env pull .env.local`
-herunterladen (Vorlage: `.env.local.example`).
+In Vercel den Upstash-Redis-Store mit dem Projekt verbinden; die Integration injiziert
+je nach Setup entweder `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` oder
+`KV_REST_API_URL` / `KV_REST_API_TOKEN` automatisch als Environment-Variablen. Der
+Code akzeptiert beide Varianten. Für die lokale Entwicklung die Variablen mit
+`vercel env pull .env.local` herunterladen (Vorlage: `.env.local.example`) und den
+Dev-Server danach neu starten.
 
-Ohne gesetztes Token nutzt die API einen gemeinsamen In-Memory-Speicher im laufenden
-Serverprozess. Das reicht zum lokalen Testen mit mehreren Geräten im selben Dev-Server,
-wird aber bei Server-Neustart zurückgesetzt und ist für Deployments nicht dauerhaft.
+Falls `vercel env pull` leere Werte wie `KV_REST_API_URL=""` schreibt, sind die
+Credentials lokal noch nicht nutzbar. Dann die Redis-REST-URL und das Token im
+Vercel-/Upstash-Dashboard kopieren oder die Variablen für die Development-Umgebung
+hinzufügen. Prüfen lässt sich die aktive Ablage über den Response-Header
+`X-Tracker-Storage`: `redis` bedeutet Redis, `memory` bedeutet lokaler Fallback.
+
+Ohne gesetzte Redis-Variablen nutzt die API einen gemeinsamen In-Memory-Speicher im
+laufenden Serverprozess. Das reicht zum lokalen Testen mit mehreren Geräten im selben
+Dev-Server, wird aber bei Server-Neustart zurückgesetzt und ist für Deployments nicht
+dauerhaft.
 # lorenz-study-timer
