@@ -40,6 +40,7 @@ export default function Tracker() {
   const daysRef = useRef(days);
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastServerTimerUpdate = useRef(0);
+  const latestLocalTimerEdit = useRef(0);
   // Don't push to the server until the initial server reconcile has run, so a
   // stale pre-reconcile snapshot can't clobber a fresher cross-device session.
   const reconciled = useRef(false);
@@ -87,6 +88,10 @@ export default function Tracker() {
     }
   }, []);
 
+  const markLocalTimerEdit = useCallback((timeMs: number) => {
+    latestLocalTimerEdit.current = Math.max(latestLocalTimerEdit.current, timeMs);
+  }, []);
+
   const adoptServerState = useCallback((server: TrackerState, forceTimer = false): boolean => {
     setDays((prev) => mergeDaysMax(prev, server.days ?? {}));
 
@@ -94,7 +99,11 @@ export default function Tracker() {
     const serverTime = Date.parse(server.timer?.lastUpdated ?? "") || 0;
     const hasTodayTimer = server.timer?.dateKey === today && serverTime > 0;
     if (!hasTodayTimer) return false;
-    if (!forceTimer && serverTime <= lastServerTimerUpdate.current) return false;
+    const newestLocalOrServerTimer = Math.max(
+      lastServerTimerUpdate.current,
+      latestLocalTimerEdit.current,
+    );
+    if (!forceTimer && serverTime <= newestLocalOrServerTimer) return false;
 
     lastServerTimerUpdate.current = serverTime;
     setBase(project(timerFromState(server.timer), Date.now()));
@@ -180,6 +189,7 @@ export default function Tracker() {
       const today = todayKey();
       if (prev.dateKey !== today) {
         // Midnight rollover: bank the finished day, start today fresh.
+        markLocalTimerEdit(now);
         setDays((d) =>
           mergeDaysMax(d, {
             [prev.dateKey]: { focusSeconds: Math.round(focusDoneToday(prev)) },
@@ -190,12 +200,13 @@ export default function Tracker() {
       }
       const next = project(prev, now);
       if (next.phase !== prev.phase || next.running !== prev.running) {
+        markLocalTimerEdit(now);
         setBase(next); // commit a focus→break / break→focus / done transition
       }
     };
     const id = setInterval(tick, TICK_MS);
     return () => clearInterval(id);
-  }, [mounted]);
+  }, [markLocalTimerEdit, mounted]);
 
   // ---- Persist on any meaningful change (local immediately, server debounced) ----
   useEffect(() => {
@@ -276,25 +287,29 @@ export default function Tracker() {
   // ("Weiter") resumes exactly where it left off.
   const onPrimary = useCallback(() => {
     setBase((prev) => {
-      const s = project(prev, Date.now());
       const now = Date.now();
+      const s = project(prev, now);
       if (s.phase === "lunch") {
         // Weiter → resume the underlying focus / break.
         const resume = s.underlyingPhase === "break" ? "break" : "focus";
+        markLocalTimerEdit(now);
         return { ...s, phase: resume, running: true, underlyingPhase: resume, lunchElapsedSeconds: 0, anchorMs: now };
       }
       if (s.running) {
         // Mittagspause → freeze the cycle, start counting lunch up.
+        markLocalTimerEdit(now);
         return { ...s, phase: "lunch", running: true, underlyingPhase: s.phase, lunchElapsedSeconds: 0, anchorMs: now };
       }
       if (s.phase === "idle") {
         if (s.remainingFocusSeconds <= 0) return s; // day done
+        markLocalTimerEdit(now);
         return { ...s, phase: "focus", running: true, blockElapsedSeconds: 0, breakElapsedSeconds: 0, underlyingPhase: "focus", anchorMs: now };
       }
       // Restored-from-cache paused focus / break → resume.
+      markLocalTimerEdit(now);
       return { ...s, running: true, anchorMs: now };
     });
-  }, []);
+  }, [markLocalTimerEdit]);
 
   // -------------------------- Derived UI --------------------------
 
