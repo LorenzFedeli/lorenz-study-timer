@@ -346,9 +346,17 @@ export function mergeDaysMax(
 }
 
 // Build the persistable TrackerState from the live React state.
+//
+// `lastUpdatedMs` MUST be the time of the last *meaningful* change (a user
+// action or an auto phase transition), NOT the push time. It drives the
+// last-writer-wins merge across devices, so periodic checkpoints have to carry
+// the original edit time — otherwise an idle background instance that merely
+// re-pushes a stale snapshot every few seconds would out-timestamp (and thus
+// clobber) a real, newer edit made on another device.
 export function toTrackerState(
   days: Record<string, DayRecord>,
   timer: TimerSnapshot,
+  lastUpdatedMs: number = Date.now(),
 ): TrackerState {
   const withToday = mergeDaysMax(days, {
     [timer.dateKey]: { focusSeconds: Math.round(focusDoneToday(timer)) },
@@ -365,7 +373,7 @@ export function toTrackerState(
       underlyingPhase: timer.underlyingPhase,
       anchorMs: timer.anchorMs,
       dateKey: timer.dateKey,
-      lastUpdated: new Date().toISOString(),
+      lastUpdated: new Date(lastUpdatedMs).toISOString(),
     },
   };
 }

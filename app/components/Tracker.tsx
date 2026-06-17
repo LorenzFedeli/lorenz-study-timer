@@ -97,9 +97,14 @@ export default function Tracker() {
     daysRef.current = days;
   }, [days]);
 
-  // Build the persistable state from the latest live values.
+  // Build the persistable state from the latest live values. The persisted
+  // `lastUpdated` is the time of the state we currently hold — either our own
+  // last local edit or the timestamp of the remote edit we last adopted —
+  // never the push time. This keeps periodic checkpoints from manufacturing a
+  // newer timestamp that would clobber a fresher edit on another device.
   const buildPersistState = useCallback((): TrackerState => {
-    return toTrackerState(daysRef.current, project(baseRef.current, Date.now()));
+    const heldEditMs = Math.max(latestLocalTimerEdit.current, lastServerTimerUpdate.current);
+    return toTrackerState(daysRef.current, project(baseRef.current, Date.now()), heldEditMs);
   }, []);
 
   const pushServer = useCallback(() => {
