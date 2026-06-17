@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lern-Timer
 
-## Getting Started
+Ein persönlicher Uni-Lern-Timer (mobile-first, Dark Mode). Ziel: an jedem Werktag
+6 h fokussierte Lernzeit in **4 × 90-Minuten-Blöcken** mit **5-Minuten-Pausen** und
+einer frei steuerbaren **Mittagspause**.
 
-First, run the development server:
+- **Haupt-Timer** zählt die verbleibende Fokuszeit (6 h → 0) herunter. Fokusblock =
+  schwarzer Hintergrund, 5-Minuten-Pause = grüner Hintergrund (sanfter Übergang).
+  Nur Fokuszeit zählt gegen die 6 h.
+- **Mittagspause** hält den gesamten Ablauf an und zählt hoch; „Weiter“ setzt exakt
+  dort fort, wo pausiert wurde.
+- **Day-Tracker** (Vorschau-Planer): 6 Wochen × 5 Werktage, aktuelle Woche links →
+  kommende Wochen rechts. Grüne Intensität nach erreichter Fokuszeit, heutiger Tag
+  hervorgehoben, Prüfungstermine in hellem Grau markiert.
+
+Der Timer läuft über echte Zeit (`Date.now()`-Differenzen), driftet also nicht in
+Hintergrund-Tabs und setzt nach einem Reload korrekt fort.
+
+## Entwicklung
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+[http://localhost:3000](http://localhost:3000) öffnen.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Persistenz (Vercel Blob)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Der gesamte App-State liegt geräteübergreifend in **einer** JSON-Datei
+(`tracker-state.json`) im Vercel-Blob-Store. Der Zugriff erfolgt ausschließlich
+serverseitig über die Route Handler unter `app/api/state` — das Token erreicht den
+Client nie.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+In Vercel unter **Storage → Create → Blob** einen Blob-Store mit dem Projekt
+verbinden; das `BLOB_READ_WRITE_TOKEN` wird dann automatisch als Environment-Variable
+injiziert. Für die lokale Entwicklung das Token mit `vercel env pull .env.local`
+herunterladen (Vorlage: `.env.local.example`). Ohne gesetztes Token startet die App
+trotzdem und nutzt automatisch nur `localStorage` als Speicher.
