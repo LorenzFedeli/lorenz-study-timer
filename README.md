@@ -37,3 +37,4 @@ verbinden; das `BLOB_READ_WRITE_TOKEN` wird dann automatisch als Environment-Var
 injiziert. Für die lokale Entwicklung das Token mit `vercel env pull .env.local`
 herunterladen (Vorlage: `.env.local.example`). Ohne gesetztes Token startet die App
 trotzdem und nutzt automatisch nur `localStorage` als Speicher.
+# lorenz-study-timer
