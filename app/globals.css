@@ -1,26 +1,26 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+
+  /* Phase backgrounds for the full-screen timer */
+  --bg-focus: #000000; /* focus & idle → black */
+  --bg-break: #15803d; /* 5-min break → green */
+  --bg-lunch: #292524; /* lunch break → warm dark */
+
+  /* Empty day cell in the planner grid */
+  --cell-empty: #1c1c1f;
+  /* Exam date marker (lighter gray, not a completed focus day) */
+  --cell-exam: #9ca3af;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #000000;
+  color: #ffffff;
+  font-family: ui-sans-serif, system-ui, -apple-system, Helvetica, Arial, sans-serif;
 }
