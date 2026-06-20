@@ -18,6 +18,7 @@
   --track: #252528;
   --fill: #2faa5a;
   --segfill: #2faa5a;
+  --free: #4f7bd6; /* Sunday free-time fill (rest day, distinct from focus) */
   --ring: #ffffff;
   --sub: var(--text-muted);
 }
@@ -53,4 +54,8 @@ body {
 
 .s-green {
   --bg: #239a50;
+}
+
+.s-rest {
+  --bg: #0e1c2e;
 }

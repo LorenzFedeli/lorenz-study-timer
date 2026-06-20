@@ -3,21 +3,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DayGrid from "./DayGrid";
 import {
+  blocksForDateKey,
   BREAK_SECONDS,
   defaultState,
   FOCUS_BLOCK_SECONDS,
   FOCUS_BLOCKS,
-  focusDoneToday,
   formatClock,
   formatHMS,
   freshTimer,
-  isWeekend,
+  isCountUpDay,
   mergeDaysMax,
   project,
   STORAGE_KEY,
   timerFromState,
   toTrackerState,
   todayKey,
+  trackedSecondsToday,
   type DayRecord,
   type LocalCache,
   type TimerSnapshot,
@@ -185,7 +186,7 @@ export default function Tracker() {
               // Cached timer belongs to a past day → bank it, start today fresh.
               initialDays = mergeDaysMax(initialDays, {
                 [cache.timer.dateKey]: {
-                  focusSeconds: Math.round(focusDoneToday(cache.timer)),
+                  focusSeconds: Math.round(trackedSecondsToday(cache.timer)),
                 },
               });
             }
@@ -238,12 +239,12 @@ export default function Tracker() {
       const prev = baseRef.current;
       const today = todayKey();
       if (prev.dateKey !== today) {
-        // Midnight rollover: bank the finished day, start today fresh.
+        // Midnight rollover: bank the finished day (projected so a running
+        // timer's in-progress time counts), start today fresh.
         markLocalTimerEdit(now);
+        const banked = Math.round(trackedSecondsToday(project(prev, now)));
         setDays((d) =>
-          mergeDaysMax(d, {
-            [prev.dateKey]: { focusSeconds: Math.round(focusDoneToday(prev)) },
-          }),
+          mergeDaysMax(d, { [prev.dateKey]: { focusSeconds: banked } }),
         );
         setBase(freshTimer(today, now));
         return;
@@ -339,6 +340,14 @@ export default function Tracker() {
     setBase((prev) => {
       const now = Date.now();
       const s = project(prev, now);
+      if (isCountUpDay(s.dateKey)) {
+        // Sunday rest day: a plain count-up stopwatch (start / pause / resume).
+        markLocalTimerEdit(now);
+        if (s.running && s.phase === "free") {
+          return { ...s, running: false, anchorMs: now }; // pause, keep elapsed
+        }
+        return { ...s, phase: "free", running: true, anchorMs: now }; // start / resume
+      }
       if (s.phase === "lunch") {
         // Weiter → resume the underlying focus / break.
         const resume = s.underlyingPhase === "break" ? "break" : "focus";
@@ -364,68 +373,90 @@ export default function Tracker() {
   // -------------------------- Derived UI --------------------------
 
   const today = mounted ? new Date() : new Date(0);
-  const isDone = live.phase === "idle" && live.remainingFocusSeconds <= 0;
+  // Sunday is a count-up rest day (no goal); everything else counts a goal down.
+  const countUp = mounted && isCountUpDay(live.dateKey);
+  const isDone = !countUp && live.phase === "idle" && live.remainingFocusSeconds <= 0;
   const isLunch = live.phase === "lunch";
-  const todayFocus = focusDoneToday(live);
+  const todayTracked = trackedSecondsToday(live);
   const dailyQuote = DAILY_QUOTES[quoteIndexForDateKey(live.dateKey || todayKey(today))];
 
-  // Progress split into the 4 focus blocks: done = full, current = partial,
-  // future = empty.
-  const blockFills = Array.from({ length: FOCUS_BLOCKS }, (_, i) =>
-    Math.min(1, Math.max(0, (todayFocus - i * FOCUS_BLOCK_SECONDS) / FOCUS_BLOCK_SECONDS)),
+  // Progress split into the day's focus blocks (4 weekdays, 2 Saturday; none on
+  // Sunday). Pre-mount we render the weekday count so the server and first
+  // client render agree (no hydration mismatch); the effect-driven re-render
+  // then settles on the real count.
+  const todayBlocks = mounted ? blocksForDateKey(live.dateKey || todayKey(today)) : FOCUS_BLOCKS;
+  const blockFills = Array.from({ length: todayBlocks }, (_, i) =>
+    Math.min(1, Math.max(0, (todayTracked - i * FOCUS_BLOCK_SECONDS) / FOCUS_BLOCK_SECONDS)),
   );
 
   // Phase → screen palette class. Drives every CSS custom property (bg, pill,
   // grid cells, track, fill, today-ring) for that screen.
   const screenClass = !mounted
     ? "s-black"
-    : live.phase === "break"
-      ? "s-green"
-      : live.phase === "lunch"
-        ? "s-pause"
-        : "s-black";
+    : live.phase === "free"
+      ? "s-rest"
+      : live.phase === "break"
+        ? "s-green"
+        : live.phase === "lunch"
+          ? "s-pause"
+          : "s-black";
 
   const phaseLabel = !mounted
     ? "—"
-    : live.phase === "focus"
-      ? "Fokus"
-      : live.phase === "break"
-        ? "Pause"
-        : live.phase === "lunch"
-          ? "Mittagspause"
-          : isDone
-            ? "Geschafft"
-            : "Bereit";
+    : countUp
+      ? live.phase === "free"
+        ? live.running
+          ? "Freizeit"
+          : "Pausiert"
+        : "Ruhetag"
+      : live.phase === "focus"
+        ? "Fokus"
+        : live.phase === "break"
+          ? "Pause"
+          : live.phase === "lunch"
+            ? "Mittagspause"
+            : isDone
+              ? "Geschafft"
+              : "Bereit";
 
   const blockLeft = Math.max(0, FOCUS_BLOCK_SECONDS - live.blockElapsedSeconds);
   const breakLeft = Math.max(0, BREAK_SECONDS - live.breakElapsedSeconds);
 
-  // The big number: during a 5-min break it counts the break down (m:ss);
-  // otherwise it's the 6 h focus total (frozen during lunch).
+  // The big number: on Sunday it counts free time up; during a 5-min break it
+  // counts the break down (m:ss); otherwise it's the focus total (frozen during
+  // lunch).
   const bigTimer = !mounted
     ? "—:—:—"
-    : live.phase === "break"
-      ? formatClock(breakLeft)
-      : formatHMS(live.remainingFocusSeconds);
+    : countUp
+      ? formatHMS(live.freeElapsedSeconds)
+      : live.phase === "break"
+        ? formatClock(breakLeft)
+        : formatHMS(live.remainingFocusSeconds);
 
   const primaryLabel = !mounted
     ? "…"
-    : live.phase === "lunch"
-      ? "Weiter"
-      : live.running
-        ? "Mittagspause"
-        : live.phase === "idle"
-          ? "Start"
-          : "Weiter";
+    : countUp
+      ? live.running
+        ? "Pause"
+        : live.phase === "free"
+          ? "Weiter"
+          : "Start"
+      : live.phase === "lunch"
+        ? "Weiter"
+        : live.running
+          ? "Mittagspause"
+          : live.phase === "idle"
+            ? "Start"
+            : "Weiter";
 
   return (
     <div className={`screen min-h-[100dvh] w-full transition-colors duration-700 ease-out ${screenClass}`}>
       <main className="mx-auto flex min-h-[100dvh] w-full max-w-[420px] flex-col gap-7 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pl-[calc(1.25rem+env(safe-area-inset-left))] pr-[calc(1.25rem+env(safe-area-inset-right))] pt-[calc(1.75rem+env(safe-area-inset-top))] text-white">
         {/* Day tracker */}
         {mounted ? (
-          <DayGrid days={days} todayFocusSeconds={todayFocus} now={today} />
+          <DayGrid days={days} todayTrackedSeconds={todayTracked} now={today} />
         ) : (
-          <div className="w-full aspect-[6/5]" />
+          <div className="w-full aspect-[7/6]" />
         )}
 
         {/* Main timer */}
@@ -445,30 +476,37 @@ export default function Tracker() {
             {bigTimer}
           </div>
 
-          {/* Progress across the 4 focus blocks */}
-          <div
-            className={`mt-1 flex w-full gap-[6px] transition-opacity duration-300 ${isLunch ? "opacity-20" : "opacity-100"}`}
-          >
-            {blockFills.map((fill, i) => (
-              <div
-                key={i}
-                className="h-[6px] flex-1 overflow-hidden rounded-[3px]"
-                style={{ backgroundColor: "var(--track)" }}
-              >
+          {/* Progress across the day's focus blocks — hidden on Sunday (no blocks) */}
+          {!countUp ? (
+            <div
+              className={`mt-1 flex w-full gap-[6px] transition-opacity duration-300 ${isLunch ? "opacity-20" : "opacity-100"}`}
+            >
+              {blockFills.map((fill, i) => (
                 <div
-                  className="h-full rounded-[3px] transition-[width] duration-500"
-                  style={{ width: `${fill * 100}%`, backgroundColor: "var(--segfill)" }}
-                />
-              </div>
-            ))}
-          </div>
+                  key={i}
+                  className="h-[6px] flex-1 overflow-hidden rounded-[3px]"
+                  style={{ backgroundColor: "var(--track)" }}
+                >
+                  <div
+                    className="h-full rounded-[3px] transition-[width] duration-500"
+                    style={{ width: `${fill * 100}%`, backgroundColor: "var(--segfill)" }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
 
           {/* Phase sub-status */}
           <div
             className="mt-1 min-h-[17px] text-center text-[13px] tabular-nums"
             style={{ color: live.phase === "focus" || isLunch ? "#ffffff" : "var(--sub)" }}
           >
-            {!mounted ? null : live.phase === "focus" ? (
+            {!mounted ? null : countUp ? (
+              <span>
+                {WEEKDAYS_DE[today.getDay()]}
+                {live.phase === "free" ? " · freie Zeit" : " · Ruhetag"}
+              </span>
+            ) : live.phase === "focus" ? (
               <span>
                 noch{" "}
                 <span className="font-mono tabular-nums">{formatClock(blockLeft)}</span> im Block
@@ -485,7 +523,7 @@ export default function Tracker() {
             ) : (
               <span>
                 {WEEKDAYS_DE[today.getDay()]}
-                {isWeekend(today) ? " · kein Werktag" : " · bereit für 4 × 90 min"}
+                {` · bereit für ${todayBlocks} × 90 min`}
               </span>
             )}
           </div>

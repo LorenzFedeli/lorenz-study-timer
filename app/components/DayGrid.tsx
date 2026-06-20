@@ -2,7 +2,8 @@
 
 import {
   buildGrid,
-  FOCUS_GOAL_SECONDS,
+  fillReferenceForDateKey,
+  isCountUpDay,
   localDateKey,
   type DayRecord,
 } from "@/app/lib/tracker";
@@ -18,40 +19,45 @@ const EXAM_DATES = new Set([
 
 interface DayGridProps {
   days: Record<string, DayRecord>;
-  todayFocusSeconds: number;
+  todayTrackedSeconds: number;
   now: Date;
 }
 
 // Colours come from the per-phase CSS variables on the enclosing .screen.
-export default function DayGrid({ days, todayFocusSeconds, now }: DayGridProps) {
+export default function DayGrid({ days, todayTrackedSeconds, now }: DayGridProps) {
   const weeks = buildGrid(now);
   const todayStr = localDateKey(now);
 
   return (
     <div className="w-full">
-      {/* One column per week — current week left, future weeks to the right */}
-      <div className="flex w-full gap-[7px]">
+      {/* One row per week — current week on top, future weeks below (Mon–Sun) */}
+      <div className="flex w-full flex-col gap-[7px]">
         {weeks.map((week, wi) => (
-          <div key={wi} className="flex flex-1 flex-col gap-[7px]">
+          <div key={wi} className="flex w-full gap-[7px]">
             {week.map((date) => {
               const key = localDateKey(date);
               const isToday = key === todayStr;
               const isExam = EXAM_DATES.has(key);
+              const isFree = isCountUpDay(key); // Sunday rest day
               const seconds = isToday
-                ? todayFocusSeconds
+                ? todayTrackedSeconds
                 : (days[key]?.focusSeconds ?? 0);
-              const fraction = Math.min(1, Math.max(0, seconds / FOCUS_GOAL_SECONDS));
+              // Fill is relative to the day's scale: its goal (6 h weekday /
+              // 3 h Saturday), or a soft reference on Sunday's count-up day.
+              const fraction = Math.min(1, Math.max(0, seconds / fillReferenceForDateKey(key)));
               const hours = seconds / 3600;
               const label = isExam
                 ? `${key}: Prüfungstermin`
-                : `${key}: ${hours.toFixed(1)} Stunden Fokus`;
+                : isFree
+                  ? `${key}: ${hours.toFixed(1)} Stunden frei`
+                  : `${key}: ${hours.toFixed(1)} Stunden Fokus`;
 
               return (
                 <div
                   key={key}
                   title={label}
                   aria-label={label}
-                  className="relative aspect-square w-full overflow-hidden rounded-[4px]"
+                  className="relative aspect-square flex-1 overflow-hidden rounded-[4px]"
                   style={{
                     backgroundColor: isExam ? "var(--cell-exam)" : "var(--cell-empty)",
                     ...(isToday
@@ -59,11 +65,15 @@ export default function DayGrid({ days, todayFocusSeconds, now }: DayGridProps) 
                       : null),
                   }}
                 >
-                  {/* Focus done that day fills the cell from the bottom up. */}
+                  {/* Tracked time that day fills the cell from the bottom up.
+                      Sunday free time uses a distinct colour from focus. */}
                   {!isExam && fraction > 0 ? (
                     <div
                       className="absolute inset-x-0 bottom-0"
-                      style={{ height: `${fraction * 100}%`, backgroundColor: "var(--fill)" }}
+                      style={{
+                        height: `${fraction * 100}%`,
+                        backgroundColor: isFree ? "var(--free)" : "var(--fill)",
+                      }}
                     />
                   ) : null}
                 </div>

@@ -16,6 +16,7 @@ const device1: TimerSnapshot = {
   blockElapsedSeconds: 0,
   breakElapsedSeconds: 0,
   lunchElapsedSeconds: 0,
+  freeElapsedSeconds: 0,
   underlyingPhase: "focus",
   anchorMs: now0,
   dateKey: "2026-06-17",
