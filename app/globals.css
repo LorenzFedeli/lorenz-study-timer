@@ -59,3 +59,23 @@ body {
 .s-rest {
   --bg: #0e1c2e;
 }
+
+/* Phone in landscape (short, wide). Desktops/tablets keep the portrait stack —
+   the max-height guard limits this to phone-sized viewports. Used as the
+   `landshort:` Tailwind variant on the layout in Tracker.tsx. */
+@custom-variant landshort {
+  @media (orientation: landscape) and (max-height: 600px) {
+    @slot;
+  }
+}
+
+/* In landscape the grid becomes height-driven so the whole week strip fits the
+   short viewport beside the timer. Width follows from the row count (set as
+   --rows by DayGrid); the square cells then size off that width as usual. */
+@media (orientation: landscape) and (max-height: 600px) {
+  .day-grid {
+    height: calc(100dvh - 1rem);
+    width: auto;
+    aspect-ratio: 7 / var(--rows, 6);
+  }
+}

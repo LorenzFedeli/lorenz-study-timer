@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import DayGrid from "./DayGrid";
 import {
   blocksForDateKey,
@@ -451,14 +451,18 @@ export default function Tracker() {
 
   return (
     <div className={`screen min-h-[100dvh] w-full transition-colors duration-700 ease-out ${screenClass}`}>
-      <main className="mx-auto flex min-h-[100dvh] w-full max-w-[420px] flex-col gap-7 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pl-[calc(1.25rem+env(safe-area-inset-left))] pr-[calc(1.25rem+env(safe-area-inset-right))] pt-[calc(1.75rem+env(safe-area-inset-top))] text-white">
+      <main className="mx-auto flex min-h-[100dvh] w-full max-w-[420px] flex-col gap-7 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pl-[calc(1.25rem+env(safe-area-inset-left))] pr-[calc(1.25rem+env(safe-area-inset-right))] pt-[calc(1.75rem+env(safe-area-inset-top))] text-white landshort:max-w-none landshort:flex-row landshort:items-center landshort:justify-center landshort:gap-8 landshort:pb-[calc(0.5rem+env(safe-area-inset-bottom))] landshort:pt-[calc(0.5rem+env(safe-area-inset-top))]">
         {/* Day tracker */}
         {mounted ? (
           <DayGrid days={days} todayTrackedSeconds={todayTracked} now={today} />
         ) : (
-          <div className="w-full aspect-[7/6]" />
+          <div className="day-grid aspect-[7/6] w-full" style={{ "--rows": 6 } as CSSProperties} />
         )}
 
+        {/* Timer + control. In landscape this is the hero pane beside the grid;
+            in the portrait stack it's transparent (display:contents) so the
+            sections keep flowing under the grid exactly as before. */}
+        <div className="contents landshort:flex landshort:min-w-0 landshort:flex-1 landshort:flex-col landshort:items-center landshort:justify-center landshort:gap-6">
         {/* Main timer */}
         <section className="flex flex-col items-center gap-3 pt-2">
           {mounted ? (
@@ -471,7 +475,7 @@ export default function Tracker() {
           ) : null}
 
           <div
-            className={`font-mono text-[clamp(40px,13vw,52px)] font-medium tracking-[0.5px] tabular-nums leading-none text-white transition-opacity duration-300 ${isLunch ? "opacity-20" : "opacity-100"}`}
+            className={`font-mono text-[clamp(40px,13vw,52px)] font-medium tracking-[0.5px] tabular-nums leading-none text-white transition-opacity duration-300 landshort:text-[clamp(44px,7vw,64px)] ${isLunch ? "opacity-20" : "opacity-100"}`}
           >
             {bigTimer}
           </div>
@@ -530,7 +534,7 @@ export default function Tracker() {
         </section>
 
         {/* Single control: Start → Mittagspause → Weiter */}
-        <section>
+        <section className="landshort:w-[240px]">
           <button
             type="button"
             onClick={onPrimary}
@@ -541,8 +545,9 @@ export default function Tracker() {
             {primaryLabel}
           </button>
         </section>
+        </div>{/* /hero pane */}
 
-        <footer className="mt-auto text-center text-[11px] leading-[1.45] text-white/55">
+        <footer className="mt-auto text-center text-[11px] leading-[1.45] text-white/55 landshort:hidden">
           {dailyQuote}
         </footer>
       </main>

@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import {
   buildGrid,
   fillReferenceForDateKey,
@@ -34,7 +35,7 @@ export default function DayGrid({ days, todayTrackedSeconds, now }: DayGridProps
   const weeks = buildGrid(now, trackedKeys);
 
   return (
-    <div className="w-full">
+    <div className="day-grid w-full" style={{ "--rows": weeks.length } as CSSProperties}>
       {/* One row per week — current week on top, future weeks below (Mon–Sun) */}
       <div className="flex w-full flex-col gap-[7px]">
         {weeks.map((week, wi) => (
