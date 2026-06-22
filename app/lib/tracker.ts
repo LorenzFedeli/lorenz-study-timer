@@ -157,14 +157,33 @@ export function mondayOf(d: Date): Date {
   return addDays(startOfDay(d), diff);
 }
 
-// Build the planner grid: GRID_WEEKS columns starting with the current week on
-// the left and extending forward into the future on the right. Each column has
-// the full 7 days Mon–Sun (weekends carry the lighter 3 h goal).
-export function buildGrid(now: Date = new Date()): Date[][] {
+// Build the planner grid as rows of full Mon–Sun weeks (weekends carry the
+// lighter 3 h goal). The forward edge stays GRID_WEEKS out from the current
+// week so upcoming exam weeks remain plannable. The back edge reaches to the
+// Monday of the oldest week that holds tracked time, so finished weeks stay
+// visible instead of scrolling off the moment a new week begins. With no past
+// content this is exactly GRID_WEEKS columns from the current week.
+export function buildGrid(
+  now: Date = new Date(),
+  trackedKeys: Iterable<string> = [],
+): Date[][] {
   const thisMonday = mondayOf(now);
+
+  let startMonday = thisMonday;
+  for (const key of trackedKeys) {
+    const [y, m, d] = key.split("-").map(Number);
+    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) continue;
+    const weekMonday = mondayOf(new Date(y, m - 1, d));
+    if (weekMonday.getTime() < startMonday.getTime()) startMonday = weekMonday;
+  }
+
+  const lastMonday = addDays(thisMonday, 7 * (GRID_WEEKS - 1));
   const weeks: Date[][] = [];
-  for (let w = 0; w < GRID_WEEKS; w++) {
-    const weekMonday = addDays(thisMonday, 7 * w);
+  for (
+    let weekMonday = startMonday;
+    weekMonday.getTime() <= lastMonday.getTime();
+    weekMonday = addDays(weekMonday, 7)
+  ) {
     const days: Date[] = [];
     for (let d = 0; d < 7; d++) days.push(addDays(weekMonday, d));
     weeks.push(days);

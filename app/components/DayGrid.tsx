@@ -25,8 +25,13 @@ interface DayGridProps {
 
 // Colours come from the per-phase CSS variables on the enclosing .screen.
 export default function DayGrid({ days, todayTrackedSeconds, now }: DayGridProps) {
-  const weeks = buildGrid(now);
   const todayStr = localDateKey(now);
+  // Past weeks that hold tracked time stay on the grid instead of scrolling off
+  // when a new week starts. Today is always within the forward window anyway.
+  const trackedKeys = Object.entries(days)
+    .filter(([key, rec]) => key !== todayStr && (rec?.focusSeconds ?? 0) > 0)
+    .map(([key]) => key);
+  const weeks = buildGrid(now, trackedKeys);
 
   return (
     <div className="w-full">
